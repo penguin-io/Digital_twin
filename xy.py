@@ -55,8 +55,10 @@ while cap.isOpened():
     is_success, buffer = cv2.imencode(".jpg", frame)
     if not is_success:
         continue
-    io_buf = io.BytesIO(buffer.tobytes())
-    image, _, f_px = depth_pro.load_rgb(io_buf)
+    with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp_file:
+        tmp_file.write(buffer.tobytes())
+        tmp_file.flush()  # Ensure data is written
+        image, _, f_px = depth_pro.load_rgb(tmp_file.name)
     depth_input = transform(image)
     prediction = depth_model.infer(depth_input, f_px=f_px)
     depth = prediction["depth"]
