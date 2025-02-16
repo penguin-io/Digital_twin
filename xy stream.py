@@ -14,9 +14,9 @@ import sys
 import signal
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
-class RTMPStreamer:
+class RTSPStreamer:
     def __init__(self, input_url, output_url, retry_interval=5, max_retries=3):
         self.input_url = input_url
         self.output_url = output_url
@@ -32,7 +32,7 @@ class RTMPStreamer:
         # Initialize detection data storage with metadata
         self.detection_data = {
             "metadata": {
-                "timestamp": datetime.now(timezone("Asia/Kolkata")).strftime('%Y-%m-%d %H:%M:%S.%f'),
+                #"timestamp": datetime.utc().strftime('%Y-%m-%d %H:%M:%S.%f'),
                 "camera": "camera1",
                 "input_stream": input_url,
                 "output_stream": output_url,
@@ -85,29 +85,17 @@ class RTMPStreamer:
         fps = int(self.cap.get(cv2.CAP_PROP_FPS))
 
         # FFmpeg command to create RTSP output stream
-        command = [
-            'ffmpeg',
-            '-y',  # Overwrite output file if it exists
-            '-f', 'rawvideo',
-            '-vcodec', 'rawvideo',
-            '-pix_fmt', 'bgr24',  # OpenCV uses BGR format
-            '-s', f'{width}x{height}',
-            '-r', str(fps),
-            '-i', '-',  # Input comes from pipe
-            '-c:v', 'libx264',
-            '-pix_fmt', 'yuv420p',
-            '-preset', 'ultrafast',
-            '-tune', 'zerolatency',  # Optimize for low-latency streaming
-            '-g', '30',  # GOP size - keyframe interval
-            '-b:v', '2M',  # Video bitrate
-            '-bufsize', '2M',  # Buffer size
-            '-maxrate', '2M',  # Maximum bitrate
-            '-rtsp_transport', 'tcp',  # Use TCP for more reliable streaming
-            '-f', 'rtsp',
-            output_rtmp_url  # Should be renamed to output_rtsp_url and use rtsp:// protocol
+        ffmpeg_command = [
+            "ffmpeg", "-y", "-re",                       # Read input in real time
+            "-f", "rawvideo", "-vcodec", "rawvideo",
+            "-pix_fmt", "bgr24", "-s", f"{width}x{height}", "-r", "30",
+            "-i", "-",                                   # Read input from stdin
+            "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
+            "-rtsp_transport", "tcp",                    # Use TCP for RTSP transport
+            "-f", "rtsp", self.output_url
         ]
         try:
-            self.ffmpeg_process = sp.Popen(command, stdin=sp.PIPE, stderr=sp.PIPE)
+            self.ffmpeg_process = sp.Popen(ffmpeg_command, stdin=sp.PIPE, stderr=sp.PIPE)
             print(f"FFmpeg process started successfully for output stream: {self.output_url}")
             return True
         except sp.SubprocessError as e:
@@ -288,11 +276,14 @@ class RTMPStreamer:
                 except IOError as e:
                     print(f"Error writing to FFmpeg process: {e}")
                     break
+                try:
+                    self.save_detection_data()
+                except IOError as e:
+                    print(f"Error writing to json file: {e}")
 
         except KeyboardInterrupt:
             print("\nInterrupted by user")
         finally:
-            self.save_detection_data()
             self.cleanup()
 
     def save_detection_data(self):
@@ -320,8 +311,8 @@ class RTMPStreamer:
         print("Cleanup complete")
 
 def main():
-    input_url = "rtmp://localhost:1935/stream"
-    output_url = "rtmp://localhost:8554/live/output_stream"
+    input_url = "rtsp://localhost:8554/akhil"
+    output_url = "rtsp://localhost:8554/output_stream"
     
     streamer = RTSPStreamer(input_url, output_url)
     streamer.run()
