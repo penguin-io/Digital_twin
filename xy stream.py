@@ -13,6 +13,8 @@ import subprocess as sp
 import sys
 import signal
 import time
+import json
+from datetime import datetime
 
 class RTMPStreamer:
     def __init__(self, input_url, output_url, retry_interval=5, max_retries=3):
@@ -26,6 +28,19 @@ class RTMPStreamer:
         # Initialize CUDA
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
+        
+        # Initialize detection data storage with metadata
+        self.detection_data = {
+            "metadata": {
+                "timestamp": datetime.now(timezone("Asia/Kolkata")).strftime('%Y-%m-%d %H:%M:%S.%f'),
+                "camera": "camera1",
+                "input_stream": input_url,
+                "output_stream": output_url,
+                "device": str(self.device)
+            },
+            "frames": []
+        }
+        self.frame_number = 0
         
         # Initialize models
         self.init_models()
@@ -129,6 +144,12 @@ class RTMPStreamer:
 
         # Process detections
         person_count = 0
+        frame_data = {
+            "frame_number": self.frame_number,
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f"),
+            "persons": []
+        }
+
         for i, box in enumerate(boxes):
             if int(classes[i]) != 0:  # Skip non-person detections
                 continue
@@ -152,27 +173,34 @@ class RTMPStreamer:
             pose_results = self.pose.process(roi_rgb)
 
             if pose_results.pose_landmarks:
-                # Draw pose landmarks and process depth information
-                self.process_pose_landmarks(frame, pose_results, x1, y1, x2, y2, 
-                                         width, height, depth_np, cx, cy, person_count)
+                person_data = self.process_pose_landmarks(frame, pose_results, x1, y1, x2, y2,
+                                                        width, height, depth_np, cx, cy, person_count)
+                frame_data["persons"].append(person_data)
 
+        self.detection_data["frames"].append(frame_data)
         return frame
 
-    def process_pose_landmarks(self, frame, pose_results, x1, y1, x2, y2, 
+    def process_pose_landmarks(self, frame, pose_results, x1, y1, x2, y2,
                              width, height, depth_np, cx, cy, person_count):
-        # Draw landmarks
+        landmarks_data = []
         adjusted_landmarks = landmark_pb2.NormalizedLandmarkList()
-        
-        for landmark in pose_results.pose_landmarks.landmark:
+
+        for idx, landmark in enumerate(pose_results.pose_landmarks.landmark):
             full_pixel_x = landmark.x * (x2 - x1) + x1
             full_pixel_y = landmark.y * (y2 - y1) + y1
-            
-            # Draw individual landmarks
+
             lm_x = int(full_pixel_x)
             lm_y = int(full_pixel_y)
             cv2.circle(frame, (lm_x, lm_y), 3, (0, 255, 0), cv2.FILLED)
-            
-            # Create adjusted landmark
+
+            landmarks_data.append({
+                "landmark_id": idx,
+                "x": lm_x,
+                "y": lm_y,
+                "z": float(landmark.z),
+                "visibility": float(landmark.visibility)
+            })
+
             new_landmark = landmark_pb2.NormalizedLandmark()
             new_landmark.x = full_pixel_x / width
             new_landmark.y = full_pixel_y / height
@@ -180,7 +208,6 @@ class RTMPStreamer:
             new_landmark.visibility = landmark.visibility
             adjusted_landmarks.landmark.append(new_landmark)
 
-        # Draw pose connections
         self.mp_drawing.draw_landmarks(
             frame,
             adjusted_landmarks,
@@ -189,19 +216,39 @@ class RTMPStreamer:
             connection_drawing_spec=self.mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2)
         )
 
-        # Calculate and draw depth information
         mean_x = int((x1 + x2) / 2)
         mean_y = int((y1 + y2) / 2)
         if mean_y < depth_np.shape[0] and mean_x < depth_np.shape[1]:
-            mean_z = depth_np[mean_y, mean_x]
+            mean_z = float(depth_np[mean_y, mean_x])
         else:
             mean_z = 0.0
         mean_rel_x = mean_x - cx
         mean_rel_y = mean_y - cy
 
         cv2.circle(frame, (mean_x, mean_y), 3, (255, 0, 0), cv2.FILLED)
-        print(f"Person {person_count}: Pixel ({mean_x}, {mean_y}, {mean_z}), "
-              f"Relative ({mean_rel_x}, {mean_rel_y}, {mean_z})")
+
+        return {
+            "person_id": person_count,
+            "bbox": {
+                "x1": int(x1),
+                "y1": int(y1),
+                "x2": int(x2),
+                "y2": int(y2)
+            },
+            "center_point": {
+                "pixel": {
+                    "x": mean_x,
+                    "y": mean_y,
+                    "z": mean_z
+                },
+                "relative": {
+                    "x": mean_rel_x,
+                    "y": mean_rel_y,
+                    "z": mean_z
+                }
+            },
+            "landmarks": landmarks_data
+        }
 
     def run(self):
         if not self.setup_video_capture():
@@ -224,10 +271,9 @@ class RTMPStreamer:
                     print("Failed to read frame")
                     break
 
-                # Process frame
                 processed_frame = self.process_frame(frame)
+                self.frame_number += 1
 
-                # Calculate and display FPS
                 current_time = time.time()
                 frame_count += 1
                 if current_time - start_time >= 1.0:
@@ -237,7 +283,6 @@ class RTMPStreamer:
                     frame_count = 0
                     start_time = current_time
 
-                # Write frame to FFmpeg process
                 try:
                     self.ffmpeg_process.stdin.write(processed_frame.tobytes())
                 except IOError as e:
@@ -247,7 +292,18 @@ class RTMPStreamer:
         except KeyboardInterrupt:
             print("\nInterrupted by user")
         finally:
+            self.save_detection_data()
             self.cleanup()
+
+    def save_detection_data(self):
+        """Save detection data to JSON file"""
+        filename = "camera1.json"
+        try:
+            with open(filename, 'w') as f:
+                json.dump(self.detection_data, f, indent=2)
+            print(f"Detection data saved to {filename}")
+        except Exception as e:
+            print(f"Error saving detection data: {e}")
 
     def cleanup(self):
         print("Cleaning up resources...")
@@ -264,11 +320,10 @@ class RTMPStreamer:
         print("Cleanup complete")
 
 def main():
-    # Configure your RTMP URLs
-    input_rtmp_url = "rtmp://localhost:1935/stream"
-    output_rtmp_url = "rtmp://localhost:1935/live/output-stream"
+    input_url = "rtmp://localhost:1935/stream"
+    output_url = "rtmp://localhost:8554/live/output_stream"
     
-    streamer = RTMPStreamer(input_rtmp_url, output_rtmp_url)
+    streamer = RTSPStreamer(input_url, output_url)
     streamer.run()
 
 if __name__ == "__main__":
