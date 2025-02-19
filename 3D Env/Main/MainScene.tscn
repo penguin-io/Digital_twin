@@ -1,0 +1,162 @@
+[gd_scene load_steps=13 format=3 uid="uid://boi4aq27mec8n"]
+
+[ext_resource type="Script" path="res://controller.gd" id="1_iegfw"]
+[ext_resource type="Script" path="res://CamMovement.gd" id="2_ul87j"]
+
+[sub_resource type="GDScript" id="GDScript_yp0ds"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_2ubvg"]
+sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+ground_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+
+[sub_resource type="Sky" id="Sky_ygv0m"]
+sky_material = SubResource("ProceduralSkyMaterial_2ubvg")
+
+[sub_resource type="Environment" id="Environment_bvb63"]
+background_mode = 2
+background_energy_multiplier = 1.5
+sky = SubResource("Sky_ygv0m")
+ambient_light_source = 2
+tonemap_mode = 2
+adjustment_enabled = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ky0hf"]
+disable_ambient_light = true
+albedo_color = Color(0.952423, 0, 0.247529, 1)
+metallic = 1.0
+metallic_specular = 1.0
+emission = Color(0.241156, 0.241156, 0.241156, 1)
+normal_scale = -16.0
+point_size = 0.5
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_8ff11"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1dkc2"]
+albedo_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_d25ae"]
+albedo_color = Color(0, 0, 0, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2lcgy"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sq7jc"]
+albedo_color = Color(0.860501, 0.567781, 0.0701556, 1)
+
+[node name="MainScene" type="Node3D"]
+script = SubResource("GDScript_yp0ds")
+metadata/movie_file = "/home/thiru/Pictures/Screenshots/"
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_bvb63")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.446198, 0.392313, 0.804361, 0, -0.898794, 0.438371, 0.894934, 0.1956, 0.40104, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Controller" type="Node" parent="." node_paths=PackedStringArray("empPrefab", "lb", "cam", "timer")]
+script = ExtResource("1_iegfw")
+empPrefab = NodePath("../Emp")
+lb = NodePath("../Label")
+cam = NodePath("../Camera3D")
+timer = NodePath("Timer")
+
+[node name="Timer" type="Timer" parent="Controller"]
+wait_time = 0.1
+
+[node name="Emp" type="MeshInstance3D" parent="."]
+transform = Transform3D(2.86, 0, 0, 0, 2.86, 0, 0, 0, 2.86, 0.806186, 1.78885, 0.708037)
+visible = false
+material_override = SubResource("StandardMaterial3D_ky0hf")
+cast_shadow = 0
+mesh = SubResource("CapsuleMesh_8ff11")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.777676, -0.25, 0.576818, -0.0868241, 0.866025, 0.492404, -0.62264, -0.433013, 0.651782, 40.1998, 13.9918, 43.5428)
+fov = 62.9464
+script = ExtResource("2_ul87j")
+
+[node name="Label" type="Label" parent="."]
+modulate = Color(0.789834, 0.078761, 3.85046e-07, 1)
+offset_right = 167.0
+offset_bottom = 83.0
+text = "Start"
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.8, 4.1, 20.1)
+visible = false
+text = "BRUH
+"
+font_size = 200
+outline_size = 1
+
+[node name="CSGCombiner3D" type="CSGCombiner3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25.6, 0, -25.7)
+material_override = SubResource("StandardMaterial3D_1dkc2")
+
+[node name="Floor" type="CSGBox3D" parent="CSGCombiner3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32.45, -0.125, 36.9)
+material_override = SubResource("StandardMaterial3D_d25ae")
+size = Vector3(99.5, 0.25, 73.8)
+
+[node name="CSGMesh3D" type="CSGMesh3D" parent="CSGCombiner3D"]
+transform = Transform3D(8.3, 0, 0, 0, 8.3, 0, 0, 0, 8.3, -20.6, 3.4, 3.7)
+mesh = SubResource("BoxMesh_2lcgy")
+
+[node name="CSGMesh3D2" type="CSGMesh3D" parent="CSGCombiner3D"]
+transform = Transform3D(9.13, 0, 0, 0, 7.47, 0, 0, 0, 5.44563, -22.26, 3.4, 3.7)
+operation = 2
+mesh = SubResource("BoxMesh_2lcgy")
+
+[node name="CSGCombiner3D2" type="CSGCombiner3D" parent="."]
+material_override = SubResource("StandardMaterial3D_sq7jc")
+
+[node name="CSGBox3D" type="CSGBox3D" parent="CSGCombiner3D2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -43.25, 0.85, 15.4)
+size = Vector3(0.5, 1.7, 68.8)
+
+[node name="CSGBox3D4" type="CSGBox3D" parent="CSGCombiner3D2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 56.35, 0.85, 11.15)
+size = Vector3(0.5, 1.7, 74.7)
+
+[node name="CSGBox3D2" type="CSGBox3D" parent="CSGCombiner3D2"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6.25, 0.85, -25.9)
+size = Vector3(0.5, 1.7, 100)
+
+[node name="CSGBox3D3" type="CSGBox3D" parent="CSGCombiner3D2"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 6.65, 0.85, 48.3)
+size = Vector3(0.5, 1.7, 99.2)
+
+[node name="CheckButton" type="CheckButton" parent="."]
+visible = false
+offset_left = 152.0
+offset_top = 35.0
+offset_right = 196.0
+offset_bottom = 59.0
+
+[node name="CheckButton2" type="CheckButton" parent="."]
+visible = false
+offset_left = 152.0
+offset_top = 69.0
+offset_right = 196.0
+offset_bottom = 93.0
+
+[node name="Label2" type="Label" parent="."]
+visible = false
+modulate = Color(0.00351917, 0.00351917, 0.00351917, 1)
+self_modulate = Color(0, 0, 0, 1)
+offset_left = 3.0
+offset_top = 33.0
+offset_right = 43.0
+offset_bottom = 56.0
+text = "Stream location : "
+
+[node name="Label3" type="Label" parent="."]
+visible = false
+modulate = Color(0, 0, 0, 1)
+offset_left = 3.0
+offset_top = 67.0
+offset_right = 118.0
+offset_bottom = 90.0
+text = "Display Employees :"
+
+[connection signal="timeout" from="Controller/Timer" to="Controller" method="_on_timer_timeout"]
